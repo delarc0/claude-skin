@@ -37,7 +37,7 @@ pick a stronger role colour; never lower the floor.
 
 ## 4. Show the preview before installing
 
-    python3 preview.py <slug>
+    python3 preview.py <slug> [--name NAME] [--sub SUB]    # the same flags install.sh will get
 
 Open `preview/<slug>.html` and show it: before dark, after dark, after light, with the badge. Install
 only after the person says it looks right.
@@ -50,9 +50,11 @@ It turns on Developer Mode, installs the painter (an AppleScript run by a Launch
 launch) and the `skin-badge` mod. Tell the person:
 
 - The first paint asks for Accessibility for `osascript` (System Settings, Privacy and Security,
-  Accessibility). They grant it, then restart Claude.
+  Accessibility). You cannot grant it for them. Then they quit and reopen
+  Claude: Developer Mode only takes effect at launch.
 - The painter opens DevTools for each window, pastes the theme into the Console and closes it. It
-  checks the front window before every keystroke and stops if anything else is in front.
+  checks the front window before every keystroke and stops if anything else is in front, including a
+  Spotlight, Raycast or Alfred panel. The log is `~/Library/Logs/local.claude-skin.log`.
 - A window that fully reloads loses the skin until the next launch.
 
 `./install.sh --uninstall` removes all of it except Developer Mode.

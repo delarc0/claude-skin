@@ -8,11 +8,6 @@
       "name": "desktop-skin",
       "source": "./",
       "description": "The skill that builds, previews and installs a skin for the Claude desktop app"
-    },
-    {
-      "name": "skin-badge",
-      "source": "./plugins/skin-badge",
-      "description": "Your name as a badge in the band above the Claude Code prompt, in your skin's colours"
     }
   ],
   "description": "Skin the Claude desktop app on macOS in your own colours, with your name above the Claude Code prompt"

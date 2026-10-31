@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Installs a skin: builds the theme and badge, the DevTools painter and its LaunchAgent, and the badge mod.
+# Installs a skin: builds the theme, the DevTools painter and its LaunchAgent, and the badge mod.
 #   ./install.sh <theme> [--name NAME] [--sub SUB]     e.g. ./install.sh my-brand --name ALEX
 #   ./install.sh --uninstall
 # The runtime lives outside ~/Documents: macOS privacy blocks launchd's zsh from reading files there.
@@ -11,9 +11,10 @@ plist=$HOME/Library/LaunchAgents/$label.plist
 
 if [[ $1 == --uninstall ]]; then
   launchctl bootout gui/$UID/$label 2>/dev/null || true
+  claude plugin uninstall skin-badge@skin-badge-local >/dev/null 2>&1 || true
+  claude plugin uninstall skin-badge@desktop-skin >/dev/null 2>&1 || true  # where versions before 0.3 put it
+  claude plugin marketplace remove skin-badge-local >/dev/null 2>&1 || true
   rm -rf $plist $dst ~/Library/Caches/$label.pid
-  claude plugin uninstall skin-badge@desktop-skin 2>/dev/null || true
-  claude plugin marketplace remove desktop-skin 2>/dev/null || true
   echo "uninstalled; Developer Mode stays on (delete ~/Library/Application Support/Claude/developer_settings.json to turn it off)"
   exit 0
 fi
@@ -21,10 +22,13 @@ fi
 theme=$1; shift
 
 python3 -I $src/build_theme.py $theme
-python3 -I $src/plugins/skin-badge/make_badge.py $theme "$@"
-
 mkdir -p $dst ~/Library/LaunchAgents
-cp $src/on-launch.sh $src/apply-skin.applescript $src/dist/$theme/console-snippet.js $dst/
+# the badge mod is drawn into its own copy, so your name never lands in the repo
+rm -rf $dst/badge && mkdir -p $dst/badge && cp -R $src/plugins/skin-badge/{.claude-plugin,hooks} $dst/badge/
+python3 -I $src/make_badge.py $theme --out $dst/badge "$@"
+print -r '{"name":"skin-badge-local","owner":{"name":"claude-skin"},"plugins":[{"name":"skin-badge","source":"./"}]}' > $dst/badge/.claude-plugin/marketplace.json
+
+cp $src/on-launch.sh $src/apply-skin.applescript $src/dist/$theme/console-snippet.js $src/dist/$theme/menu-labels.txt $dst/
 # Developer Mode is what puts "Show All Dev Tools" in Claude's menus
 python3 -I - <<PY
 import json, pathlib
@@ -50,7 +54,16 @@ ps -axo pid=,comm= | awk '$2=="/Applications/Claude.app/Contents/MacOS/Claude"{p
 launchctl bootout gui/$UID/$label 2>/dev/null || true
 launchctl bootstrap gui/$UID $plist
 
-claude plugin marketplace add $src >/dev/null 2>&1 || claude plugin marketplace update desktop-skin >/dev/null
-claude plugin install skin-badge@desktop-skin --scope user >/dev/null 2>&1 || true
-echo "installed $theme. Painter: $dst (log ~/Library/Logs/$label.log), badge: skin-badge@desktop-skin."
-echo "It paints at Claude's next start; the first run asks for Accessibility for osascript."
+echo "installed $theme. Painter: $dst (log ~/Library/Logs/$label.log)."
+if ! command -v claude >/dev/null; then
+  echo "no claude command: skipped the badge. Install Claude Code, then rerun this." >&2
+else
+  claude plugin uninstall skin-badge@desktop-skin >/dev/null 2>&1 || true  # where versions before 0.3 put it
+  # Claude Code loads a cached copy of the mod, so a new name or theme needs a fresh install
+  claude plugin uninstall skin-badge@skin-badge-local >/dev/null 2>&1 || true
+  claude plugin marketplace add $dst/badge >/dev/null 2>&1 || claude plugin marketplace update skin-badge-local >/dev/null 2>&1 || true
+  claude plugin install skin-badge@skin-badge-local --scope user >/dev/null 2>&1 || true
+  if claude plugin list 2>/dev/null | grep -q "skin-badge@skin-badge-local"; then echo "badge: skin-badge@skin-badge-local"
+  else echo "badge NOT installed: run claude plugin install skin-badge@skin-badge-local" >&2; fi
+fi
+echo "Quit and reopen Claude. The first paint asks for Accessibility: allow it, then quit and reopen once more."

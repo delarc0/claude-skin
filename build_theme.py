@@ -66,19 +66,31 @@ def contrast(a, b):
 
 
 # --- the app's tokens ----------------------------------------------------------
-def app_css():
+def asar_files(want):
+    """Yields (path, text) for every packed file in app.asar whose path passes want()."""
     with ASAR.open("rb") as f:
         f.seek(12); hlen = struct.unpack("<I", f.read(4))[0]
         header = json.loads(f.read(hlen)); base = (16 + hlen + 3) & ~3
-        stack = [header]
+        stack = [("", header)]
         while stack:
-            node = stack.pop()
+            path, node = stack.pop()
             for name, v in node.get("files", {}).items():
-                if "files" in v: stack.append(v); continue
-                if not name.endswith(".css") or v.get("unpacked"): continue
-                f.seek(base + int(v["offset"])); data = f.read(v["size"]).decode("utf-8", "replace")
-                if "--cds-surface-0:" in data: return data
+                if "files" in v: stack.append((f"{path}/{name}", v)); continue
+                if not want(f"{path}/{name}") or v.get("unpacked"): continue
+                f.seek(base + int(v["offset"])); yield f"{path}/{name}", f.read(v["size"]).decode("utf-8", "replace")
+
+def app_css():
+    for _, data in asar_files(lambda p: p.endswith(".css")):
+        if "--cds-surface-0:" in data: return data
     sys.exit("no --cds-* stylesheet in app.asar: the app's theme layout changed, re-read it")
+
+def menu_labels():
+    """"Show All Dev Tools" in every language the app ships; the painter clicks whichever its menu shows."""
+    labels = ["Show All Dev Tools"]
+    for _, data in asar_files(lambda p: p.startswith("/resources/i18n/") and p.endswith(".json")):
+        label = json.loads(data).get("STqYpFr7p4")  # the app's message id for that menu item
+        if isinstance(label, str) and label not in labels: labels.append(label)
+    return labels
 
 def blocks(css):
     """selector -> {token: value}, repeated selectors merged in source order."""
@@ -128,14 +140,16 @@ def build(theme, css):
         src_ramp = ramp(src.group(1))
         # the pure colour goes where dark mode reads this role's text, and its fill when the ink on it still reads
         ink = deep_ink if role == "accent" else chain(f"--cds-on-{role}", dark, root)[1]
-        keys = [f"--cds-text-{role}"] + ([f"--cds-fill-{role}"] if contrast(neon, ink) >= 4.5 else [])
+        keys = ([f"--cds-text-{role}"] if contrast(neon, deep_ink) >= 4.5 else []) + \
+               ([f"--cds-fill-{role}"] if contrast(neon, ink) >= 4.5 else [])
         neon_at = {t for k in keys for t in chain(k, dark, root)[0]}
         _, nc, nh = to_oklch(neon)
         for step in steps:
             tok = f"--cds-role-{role}-{step}"
             out[tok] = neon if tok in neon_at else from_oklch(to_oklch(src_ramp[step])[0], nc, nh)
     if "accent" in theme["roles"]:
-        out["--cds-role-accent-on"] = deep_ink  # dark ink on the neon fill
+        fill = chain("--cds-fill-accent", dark, out, root)[1]
+        out["--cds-role-accent-on"] = max((deep_ink, "#ffffff"), key=lambda ink: contrast(ink, fill))  # whichever reads on the fill
 
     dark_over = {"--cds-text-primary": "var(--cds-gray-100)"}  # LAB37 v4 anti-glare ceiling, L ~ 0.90
     if "accent" in theme["roles"]:
@@ -153,6 +167,7 @@ def check(out, dark_over, scopes):
     pairs = [("dark text-primary / surface-0", D, "--cds-text-primary", "--cds-surface-0", 7),
              ("dark text-secondary / surface-1", D, "--cds-text-secondary", "--cds-surface-1", 4.5),
              ("dark text-muted / surface-1", D, "--cds-text-muted", "--cds-surface-1", 4.5),
+             ("dark text-primary / surface-3", D, "--cds-text-primary", "--cds-surface-3", 4.5),
              ("light text-primary / surface-0", Lt, "--cds-text-primary", "--cds-surface-0", 7),
              ("light text-muted / surface-0", Lt, "--cds-text-muted", "--cds-surface-0", 4.5)]
     for role in ("accent", "success", "danger", "warning"):
@@ -162,7 +177,8 @@ def check(out, dark_over, scopes):
     bad = []
     for label, s, fg, bg, floor in pairs:
         f, b = val(fg, *s), val(bg, *s)
-        if not (f or "").startswith("#") or not (b or "").startswith("#"): continue  # not a flat colour
+        if not (f or "").startswith("#") or not (b or "").startswith("#"):  # an app update changed the token's form
+            bad.append(f"{label} unreadable ({f} on {b})"); continue
         ratio = contrast(f, b)
         # never fail a pair the app itself ships below the floor (light muted text is ~3.4), only worsening it
         floor = min(floor, contrast(val(fg, *app[id(s)]), val(bg, *app[id(s)])) - 0.05)
@@ -175,6 +191,7 @@ def main():
     names = [a for a in sys.argv[1:] if not a.startswith("--")]
     if len(names) != 1: sys.exit(f"usage: build_theme.py <theme> [--check]; themes: {', '.join(p.stem for p in (HERE / 'themes').glob('*.json'))}")
     name = names[0]
+    if not (HERE / "themes" / f"{name}.json").exists(): sys.exit(f"no themes/{name}.json")
     theme = json.loads((HERE / "themes" / f"{name}.json").read_text())
     out, dark_over, scopes = build(theme, app_css())
     bad = check(out, dark_over, scopes)
@@ -199,6 +216,7 @@ def main():
     dist.mkdir(parents=True, exist_ok=True)
     (dist / "theme.css").write_text(css)
     (dist / "console-snippet.js").write_text(js)
+    (dist / "menu-labels.txt").write_text("\n".join(menu_labels()) + "\n")
     print(f"wrote {dist}/theme.css ({len(css)} B) and console-snippet.js")
 
 

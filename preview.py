@@ -2,10 +2,10 @@
 """Renders a theme before you install it: a mock Claude window built on the app's own tokens,
 before and after, dark and light, with the badge in the band above the prompt.
 
-    python3 preview.py my-brand           # writes preview/my-brand.html; open it in a browser
+    python3 preview.py my-brand [--name ALEX] [--sub ACME]   # writes preview/my-brand.html
 Run build_theme.py <theme> first.
 """
-import html, importlib.util, json, re, sys
+import argparse, html, importlib.util, json, re, sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -15,20 +15,23 @@ def load(name, path):
     spec.loader.exec_module(m); return m
 
 bt = load("build_theme", HERE / "build_theme.py")
-mb = load("make_badge", HERE / "plugins/skin-badge/make_badge.py")
+mb = load("make_badge", HERE / "make_badge.py")
 
-name = sys.argv[1] if len(sys.argv) > 1 else sys.exit("usage: preview.py <theme>")
+ap = argparse.ArgumentParser()
+ap.add_argument("theme"); ap.add_argument("--name"); ap.add_argument("--sub")
+a = ap.parse_args()
+name = a.theme
+if not (HERE / "themes" / f"{name}.json").exists(): sys.exit(f"no themes/{name}.json")
 theme = json.loads((HERE / "themes" / f"{name}.json").read_text())
+if not (HERE / "dist" / name / "theme.css").exists(): sys.exit(f"run python3 build_theme.py {name} first")
 skin = (HERE / "dist" / name / "theme.css").read_text()
 css = bt.app_css()
 # the app's own token rules: the ramps, .cds-root and its light/dark/system variants
 tokens = "\n".join(m.group(0) for m in re.finditer(
     r"(?<=[}\s])[^{}@]*(?:\.cds-root|:where\(:root,:host\))[^{}]*\{\s*--[^{}]*\}", css))
 tokens += "\n".join(re.findall(r"@media \(prefers-color-scheme:\s*dark\)\{[^{}]*\.cds-root[^{}]*\{[^{}]*\}\}", css))
-b, fonts = theme["badge"], theme.get("fonts", {})
-mono = bool(fonts.get("mono"))
-font = f"'{fonts['mono']}','SF Mono',monospace" if mono else f"'{fonts.get('sans', 'system-ui')}',system-ui,sans-serif"
-badge = mb.badge(b["name"], b.get("sub", ""), b, font, mono)[0]
+badge_name, sub, font, mono = mb.badge_text(theme, a.name, a.sub)  # what install.sh draws with the same flags
+badge = mb.badge(badge_name, sub, theme["badge"], font, mono)[0]
 
 STYLE = """html,body{margin:0;height:100%}
 .app{display:flex;height:100vh;font:15px/1.5 var(--cds-font-sans,-apple-system,system-ui,sans-serif);background:var(--cds-surface-0);color:var(--cds-text-primary)}
@@ -54,15 +57,18 @@ BODY = f"""<div class="cds-root app" data-mode="{{mode}}">
   <p>Read <code>--cds-surface-0</code> from <a href="#">app.asar</a>. The theme keeps the app's lightness steps, so contrast holds.</p>
   <div class="tool"><span class="mono">Bash</span> <span class="muted">build_theme.py --check</span> <span class="chip ok">passed</span> <span class="chip bad">1 error</span> <span class="chip warn">review</span></div>
   <pre>15.68  ok   dark text-accent / surface-0</pre>
-  <div class="band">{badge}</div>
+  <div class="user">Now put my name above the prompt</div>
+  <p>Done. The <code>skin-badge</code> mod draws it in the band above the prompt, in the theme's colours.</p>
+  <div class="band">{{badge}}</div>
   <div class="composer"><span class="muted">Reply to Claude...</span><div class="row"><span class="chip">Opus</span><button>&#8593;</button></div></div>
  </main></div>"""
 
-def page(mode, extra):
+def page(mode, extra, band=""):
     return (f"<!doctype html><meta charset=utf-8><style>{tokens}</style><style>{extra}</style>"
-            f"<style>{STYLE}</style>{BODY.replace('{mode}', mode)}")
+            f"<style>{STYLE}</style>{BODY.replace('{mode}', mode).replace('{badge}', band)}")
 
-frames = [("Before, dark", page("dark", "")), ("After, dark", page("dark", skin)), ("After, light", page("light", skin))]
+# the stock app has no badge, so only the "after" frames get one
+frames = [("Before, dark", page("dark", "")), ("After, dark", page("dark", skin, badge)), ("After, light", page("light", skin, badge))]
 out = HERE / "preview" / f"{name}.html"
 out.parent.mkdir(exist_ok=True)
 out.write_text(

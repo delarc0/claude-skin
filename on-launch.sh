@@ -6,4 +6,5 @@ pid=$(ps -axo pid=,comm= | awk '$2=="/Applications/Claude.app/Contents/MacOS/Cla
 [[ -z $pid || $(cat $state 2>/dev/null) == $pid ]] && exit 0
 echo $pid > $state  # once per launch, even on failure: a retry loop would keep stealing focus
 sleep 8             # let the windows load their pages
-echo "$(date '+%F %T') pid $pid: $(osascript $dir/apply-skin.applescript $dir/console-snippet.js 2>&1)"
+kill -0 $pid 2>/dev/null || exit 0  # quit meanwhile: "activate" would start it again
+echo "$(date '+%F %T') pid $pid: $(osascript $dir/apply-skin.applescript $dir/console-snippet.js $dir/menu-labels.txt 2>&1)"
