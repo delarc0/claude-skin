@@ -1,0 +1,32 @@
+{
+  "label": "LAB37 cyberpunk",
+  "source": "LAB37 neon palette: cyan, lime and magenta on near-black violet",
+  "ground": {
+    "hue": "#100d23",
+    "deep": "#0a0818",
+    "base": "#100d23",
+    "raised": "#261d45"
+  },
+  "roles": {
+    "accent": "#00ffc8",
+    "success": "#9dff00",
+    "danger": "#ff2bd6",
+    "warning": "#fdd663"
+  },
+  "fonts": {
+    "sans": "Inter",
+    "mono": "JetBrains Mono"
+  },
+  "badge": {
+    "name": "OPERATOR",
+    "sub": "LAB37",
+    "fill": "#0a0818",
+    "stroke": "#00ffc8",
+    "ink": "#00ffc8",
+    "subInk": "#868693",
+    "mark": "#9dff00",
+    "markShape": "square",
+    "offset": "#ff2bd6",
+    "chamfer": true
+  }
+}

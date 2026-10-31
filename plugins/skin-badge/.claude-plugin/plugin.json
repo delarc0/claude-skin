@@ -1,0 +1,10 @@
+{
+  "name": "skin-badge",
+  "version": "0.2.0",
+  "description": "Your name as a badge in the band above the Claude Code prompt, in your skin's colours",
+  "author": {
+    "name": "LAB37",
+    "url": "https://lab37.io"
+  },
+  "license": "MIT"
+}

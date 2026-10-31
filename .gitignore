@@ -1,0 +1,6 @@
+dist/
+preview/
+__pycache__/
+# your own themes stay local; only the example is shared
+themes/*.json
+!themes/lab37-cyberpunk.json
