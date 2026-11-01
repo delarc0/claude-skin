@@ -37,8 +37,13 @@ on run argv
 end run
 
 on skinWindow(win)
-	tell application "System Events" to perform action "AXRaise" of win
-	delay 0.4
+	-- a raise can lose to Claude bringing its main window back, so raise until DevTools is in front
+	repeat 5 times
+		tell application "System Events" to perform action "AXRaise" of win
+		delay 0.4
+		tell application "System Events" to set frontWin to front window of process "Claude"
+		if my isDevTools(frontWin) then exit repeat
+	end repeat
 	-- if a guard aborts, this DevTools window stays open: closing it blind could hit the wrong window
 	my guard()
 	tell application "System Events" to keystroke "p" using {command down, shift down} -- DevTools command menu
@@ -79,10 +84,9 @@ on guard()
 		if not (frontmost of process "Claude") then error "aborted: Claude is not frontmost"
 		-- launcher panels take the keyboard without becoming frontmost
 		-- shortcut: only these three are known, add others here if a user reports one
-		repeat with launcher in {"Spotlight", "Raycast", "Alfred"}
-			if exists process launcher then
-				if (count of windows of process launcher) > 0 then error "aborted: " & launcher & " is open"
-			end if
+		-- one query: "exists process" by name takes about 3 s each when the process is absent
+		repeat with launcher in (processes whose name is "Spotlight" or name is "Raycast" or name is "Alfred")
+			if (count of windows of launcher) > 0 then error "aborted: " & (name of launcher) & " is open"
 		end repeat
 		set win to front window of process "Claude"
 	end tell
