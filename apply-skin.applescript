@@ -23,9 +23,8 @@ on run argv
 		-- DevTools windows can all be untitled, so paint whichever is first and let Cmd+W remove it
 		set painted to 0
 		repeat total times
-			set wins to my devToolsWindows()
-			if wins is {} then exit repeat
-			my skinWindow(item 1 of wins)
+			if my devToolsWindows() is {} then exit repeat
+			my skinWindow()
 			set painted to painted + 1
 		end repeat
 	on error msg
@@ -36,10 +35,13 @@ on run argv
 	return "sent to " & painted & " window(s)" -- typed, not confirmed: the page gives no answer back
 end run
 
-on skinWindow(win)
-	-- a raise can lose to Claude bringing its main window back, so raise until DevTools is in front
+on skinWindow()
+	-- an untitled window is addressed by its place in the window list, which shifts as windows move,
+	-- so look the window up again before every raise until DevTools is in front
 	repeat 5 times
-		tell application "System Events" to perform action "AXRaise" of win
+		set wins to my devToolsWindows()
+		if wins is {} then error "the DevTools window closed"
+		tell application "System Events" to perform action "AXRaise" of (item 1 of wins)
 		delay 0.4
 		tell application "System Events" to set frontWin to front window of process "Claude"
 		if my isDevTools(frontWin) then exit repeat
